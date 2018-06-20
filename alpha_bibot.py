@@ -18,12 +18,34 @@ def pullData(pair):
 	klines = pd.DataFrame(client.get_historical_klines(pair, Client.KLINE_INTERVAL_5MINUTE, "30 days ago UTC"), dtype='float')
 	data_raw = klines[[1, 2, 3, 4, 5, 8]].values
 	dates_raw = klines[[0]].values
+	dates = []
+	for date in dates_raw:
+		dates.append( datetime.datetime.fromtimestamp( ( date[0]/1e3 ) ) )
+	return dates, data_raw
+
+# Pulls data in various time intervals from Binance API
+def pullVariousData(pair):
+	klines5m = pd.DataFrame(client.get_historical_klines(pair, Client.KLINE_INTERVAL_5MINUTE, "30 days ago UTC"), dtype='float')
+	klines15m = pd.DataFrame(client.get_historical_klines(pair, Client.KLINE_INTERVAL_15MINUTE, "90 days ago UTC"), dtype='float')
+	klines1h = pd.DataFrame(client.get_historical_klines(pair, Client.KLINE_INTERVAL_1HOUR, "360 days ago UTC"), dtype='float')
+	klines8h = pd.DataFrame(client.get_historical_klines(pair, Client.KLINE_INTERVAL_8HOUR, "600 days ago UTC"), dtype='float')
+	klines = pd.concat([klines8h, klines1h, klines15m, klines5m])
+	data_raw = klines[[1, 2, 3, 4, 5, 8]].values
+	dates_raw = klines[[0]].values
+	dates = []
+	for date in dates_raw:
+		dates.append( datetime.datetime.fromtimestamp( ( date[0]/1e3 ) ) )
+	return dates, data_raw
+
+# Pulls only price data in various time intervals from Binance API
+def pullPriceData(pair):
+	klines = pd.DataFrame(client.get_historical_klines(pair, Client.KLINE_INTERVAL_5MINUTE, "300 days ago UTC"), dtype='float')
+	dates_raw = klines[[0]].values
 	prices = klines[[1]].values
 	dates = []
 	for date in dates_raw:
 		dates.append( datetime.datetime.fromtimestamp( ( date[0]/1e3 ) ) )
-	return dates, prices, data_raw
-
+	return dates, prices
 
 # Turns a 2D array into a 3D array by turning each row into a 2D array
 #   with window_size past values
@@ -106,21 +128,21 @@ if __name__ == "__main__":
 	# Trading pair to look up 
 	pair = "BTCUSDT"
 	# Defining hyper parameters
-	window_size = 64
-	dropout_value = 0.2
+	window_size = 128
+	dropout_value = 0.3
 	activation_function = 'linear'
 	loss_function = 'mse'
 	optimizer = 'adam'
 
 	# Pulls the data from Binance
-	dates, prices, dates_raw = pullData(pair)
+	dates, dates_raw = pullVariousData(pair)
 
 	# Creates a 3D array so each input turns into a list containing of past inputs
 	X_input = addDimension(dates_raw.tolist(), window_size)
 	X_input, unnormalize = normalizeValues(X_input)
 	np.random.shuffle(X_input)
 
-	# Splits 90% of the data for training and 10% for testing
+	# Splits 96% of the data for training and 4% for testing
 	X_training, X_testing = splitData(X_input, 0.96)
 
 	# Splits the data into sequence and result
@@ -133,4 +155,6 @@ if __name__ == "__main__":
 	print(model.summary())
 	model.fit(X_training, Y_training, epochs=2, batch_size=32)
 
-	testModel(model, X_testing, Y_testing, unnormalize)
+	model.save('bibot2.h5')
+
+	# testModel(model, X_testing, Y_testing, unnormalize)
